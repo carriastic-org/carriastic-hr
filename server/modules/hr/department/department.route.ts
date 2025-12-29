@@ -32,6 +32,10 @@ const assignMembersInput = z.object({
   memberUserIds: z.array(z.string().min(1)).default([]),
 });
 
+const deleteDepartmentInput = z.object({
+  departmentId: z.string().min(1, "Select a department to delete."),
+});
+
 export const hrDepartmentRouter = createTRPCRouter({
   overview: protectedProcedure.query(({ ctx }) =>
     hrDepartmentController.overview({ ctx }),
@@ -51,5 +55,10 @@ export const hrDepartmentRouter = createTRPCRouter({
     .input(assignMembersInput)
     .mutation(({ ctx, input }) =>
       hrDepartmentController.assignMembers({ ctx, input }),
+    ),
+  delete: protectedProcedure
+    .input(deleteDepartmentInput)
+    .mutation(({ ctx, input }) =>
+      hrDepartmentController.delete({ ctx, input }),
     ),
 });

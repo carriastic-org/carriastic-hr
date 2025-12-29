@@ -13,6 +13,10 @@ const createTeamInput = z.object({
     .nullable(),
 });
 
+const updateTeamInput = createTeamInput.extend({
+  teamId: z.string().min(1, "Select a team to update."),
+});
+
 const assignLeadInput = z.object({
   teamId: z.string().min(1, "Team ID is required."),
   leadUserIds: z.array(z.string().min(1)).default([]),
@@ -23,11 +27,18 @@ const assignMembersInput = z.object({
   memberUserIds: z.array(z.string().min(1)).default([]),
 });
 
+const deleteTeamInput = z.object({
+  teamId: z.string().min(1, "Select a team to delete."),
+});
+
 export const hrTeamRouter = createTRPCRouter({
   overview: protectedProcedure.query(({ ctx }) => hrTeamController.overview({ ctx })),
   createTeam: protectedProcedure
     .input(createTeamInput)
     .mutation(({ ctx, input }) => hrTeamController.createTeam({ ctx, input })),
+  updateTeam: protectedProcedure
+    .input(updateTeamInput)
+    .mutation(({ ctx, input }) => hrTeamController.updateTeam({ ctx, input })),
   assignLead: protectedProcedure
     .input(assignLeadInput)
     .mutation(({ ctx, input }) =>
@@ -39,4 +50,7 @@ export const hrTeamRouter = createTRPCRouter({
   assignMembers: protectedProcedure
     .input(assignMembersInput)
     .mutation(({ ctx, input }) => hrTeamController.assignMembers({ ctx, input })),
+  deleteTeam: protectedProcedure
+    .input(deleteTeamInput)
+    .mutation(({ ctx, input }) => hrTeamController.deleteTeam({ ctx, input })),
 });

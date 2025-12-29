@@ -3,6 +3,7 @@ import type {
   HrAssignDepartmentHeadInput,
   HrAssignDepartmentMembersInput,
   HrCreateDepartmentInput,
+  HrDeleteDepartmentInput,
   HrUpdateDepartmentInput,
 } from "@/types/hr-department";
 import { hrDepartmentService } from "./department.service";
@@ -22,4 +23,6 @@ export const hrDepartmentController = {
     ctx: TRPCContext;
     input: HrAssignDepartmentMembersInput;
   }) => hrDepartmentService.assignMembers(ctx, input),
+  delete: ({ ctx, input }: { ctx: TRPCContext; input: HrDeleteDepartmentInput }) =>
+    hrDepartmentService.deleteDepartment(ctx, input),
 };

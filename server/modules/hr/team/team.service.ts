@@ -5,8 +5,10 @@ import {
   type HrAssignTeamLeadInput,
   type HrAssignTeamMembersInput,
   type HrCreateTeamInput,
+  type HrDeleteTeamInput,
   type HrTeamManagementResponse,
   type HrTeamPerson,
+  type HrUpdateTeamInput,
   canManageTeams,
 } from "@/types/hr-team";
 import { requireHrAdmin, requireTeamManager } from "@/server/modules/hr/utils";
@@ -282,6 +284,53 @@ export const hrTeamService = {
     });
   },
 
+  async updateTeam(ctx: TRPCContext, input: HrUpdateTeamInput) {
+    const user = requireTeamManager(ctx);
+    const organizationId = user.organizationId;
+
+    if (!organizationId) {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: "Join an organization to manage teams.",
+      });
+    }
+
+    const team = await ctx.prisma.team.findFirst({
+      where: { id: input.teamId, organizationId },
+      select: { id: true },
+    });
+
+    if (!team) {
+      throw new TRPCError({ code: "NOT_FOUND", message: "Team not found." });
+    }
+
+    const name = input.name.trim();
+    if (!name) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "Team name is required." });
+    }
+
+    const department = await ctx.prisma.department.findFirst({
+      where: { id: input.departmentId, organizationId },
+      select: { id: true },
+    });
+
+    if (!department) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "Select a valid department for this organization.",
+      });
+    }
+
+    await ctx.prisma.team.update({
+      where: { id: team.id },
+      data: {
+        name,
+        departmentId: department.id,
+        description: input.description?.trim() ? input.description.trim() : null,
+      },
+    });
+  },
+
   async assignLead(ctx: TRPCContext, input: HrAssignTeamLeadInput) {
     const user = requireTeamManager(ctx);
     const organizationId = user.organizationId;
@@ -466,6 +515,58 @@ export const hrTeamService = {
             teamId: null,
           },
         });
+      }
+    });
+  },
+
+  async deleteTeam(ctx: TRPCContext, input: HrDeleteTeamInput) {
+    const user = requireTeamManager(ctx);
+    const organizationId = user.organizationId;
+
+    if (!organizationId) {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: "Join an organization to manage teams.",
+      });
+    }
+
+    const team = await ctx.prisma.team.findFirst({
+      where: { id: input.teamId, organizationId },
+      select: { id: true, leads: { select: { leadId: true } } },
+    });
+
+    if (!team) {
+      throw new TRPCError({ code: "NOT_FOUND", message: "Team not found." });
+    }
+
+    const leadIds = team.leads.map((lead) => lead.leadId);
+
+    await ctx.prisma.$transaction(async (tx) => {
+      await tx.employmentDetail.updateMany({
+        where: { organizationId, teamId: team.id },
+        data: { teamId: null },
+      });
+
+      await tx.team.delete({
+        where: { id: team.id },
+      });
+
+      if (leadIds.length) {
+        const remainingLeads = await tx.teamLead.findMany({
+          where: { leadId: { in: leadIds } },
+          select: { leadId: true },
+        });
+        const remainingLeadIds = new Set(remainingLeads.map((entry) => entry.leadId));
+        const toUnset = leadIds.filter((leadId) => !remainingLeadIds.has(leadId));
+        if (toUnset.length) {
+          await tx.employmentDetail.updateMany({
+            where: {
+              organizationId,
+              userId: { in: toUnset },
+            },
+            data: { isTeamLead: false },
+          });
+        }
       }
     });
   },

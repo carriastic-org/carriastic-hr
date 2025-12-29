@@ -59,3 +59,14 @@ export type HrAssignTeamMembersInput = {
   teamId: string;
   memberUserIds: string[];
 };
+
+export type HrUpdateTeamInput = {
+  teamId: string;
+  name: string;
+  departmentId: string;
+  description?: string | null;
+};
+
+export type HrDeleteTeamInput = {
+  teamId: string;
+};

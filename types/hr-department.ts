@@ -67,3 +67,7 @@ export type HrAssignDepartmentMembersInput = {
   departmentId: string;
   memberUserIds: string[];
 };
+
+export type HrDeleteDepartmentInput = {
+  departmentId: string;
+};

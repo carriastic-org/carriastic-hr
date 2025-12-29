@@ -6,6 +6,9 @@ import {
   FiCheckCircle,
   FiLayers,
   FiTarget,
+  FiEdit2,
+  FiEye,
+  FiTrash2,
   FiUserCheck,
   FiUsers,
 } from "react-icons/fi";
@@ -14,6 +17,7 @@ import Button from "@/app/components/atoms/buttons/Button";
 import TextInput from "@/app/components/atoms/inputs/TextInput";
 import TextArea from "@/app/components/atoms/inputs/TextArea";
 import LoadingSpinner from "@/app/components/LoadingSpinner";
+import { Modal } from "@/app/components/atoms/frame/Modal";
 import type { HrDepartmentPerson } from "@/types/hr-department";
 import { trpc } from "@/trpc/client";
 
@@ -43,6 +47,15 @@ const MemberPill = ({ person }: { person: HrDepartmentPerson }) => (
   </div>
 );
 
+type DepartmentEditDraft = {
+  departmentId: string;
+  name: string;
+  code: string;
+  description: string;
+  headUserId: string;
+  memberUserIds: string[];
+};
+
 export default function DepartmentManagementClient() {
   const utils = trpc.useUtils();
   const overviewQuery = trpc.hrDepartment.overview.useQuery(undefined, {
@@ -52,21 +65,20 @@ export default function DepartmentManagementClient() {
   const updateMutation = trpc.hrDepartment.update.useMutation();
   const assignHeadMutation = trpc.hrDepartment.assignHead.useMutation();
   const assignMembersMutation = trpc.hrDepartment.assignMembers.useMutation();
+  const deleteMutation = trpc.hrDepartment.delete.useMutation();
 
   const [createForm, setCreateForm] = useState({
     name: "",
     code: "",
     description: "",
   });
-  const [detailEdits, setDetailEdits] = useState<
-    Record<string, { name: string; code: string; description: string }>
-  >({});
-  const [headEdits, setHeadEdits] = useState<Record<string, string>>({});
-  const [memberEdits, setMemberEdits] = useState<Record<string, string[]>>({});
   const [alert, setAlert] = useState<AlertState>(null);
-  const [pendingDetailId, setPendingDetailId] = useState<string | null>(null);
-  const [pendingHeadId, setPendingHeadId] = useState<string | null>(null);
-  const [pendingMembersId, setPendingMembersId] = useState<string | null>(null);
+  const [viewDepartmentId, setViewDepartmentId] = useState<string | null>(null);
+  const [editDepartmentId, setEditDepartmentId] = useState<string | null>(null);
+  const [deleteDepartmentId, setDeleteDepartmentId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState<DepartmentEditDraft | null>(null);
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     if (!alert) return;
@@ -107,6 +119,18 @@ export default function DepartmentManagementClient() {
   }
 
   const canManage = data.canManage;
+  const viewDepartment = viewDepartmentId
+    ? data.departments.find((dept) => dept.id === viewDepartmentId) ?? null
+    : null;
+  const editDepartment = editDepartmentId
+    ? data.departments.find((dept) => dept.id === editDepartmentId) ?? null
+    : null;
+  const deleteDepartment = deleteDepartmentId
+    ? data.departments.find((dept) => dept.id === deleteDepartmentId) ?? null
+    : null;
+  const viewMembers = viewDepartment
+    ? data.employees.filter((employee) => viewDepartment.memberUserIds.includes(employee.userId))
+    : [];
 
   const handleCreateSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -140,7 +164,42 @@ export default function DepartmentManagementClient() {
     );
   };
 
-  const handleSaveDetails = (departmentId: string) => {
+  const handleOpenViewModal = (departmentId: string) => {
+    setViewDepartmentId(departmentId);
+  };
+
+  const handleOpenEditModal = (departmentId: string) => {
+    const department = data.departments.find((dept) => dept.id === departmentId);
+    if (!department) {
+      setAlert({ type: "error", message: "Department not found." });
+      return;
+    }
+    setEditDraft({
+      departmentId: department.id,
+      name: department.name ?? "",
+      code: department.code ?? "",
+      description: department.description ?? "",
+      headUserId: department.headUserId ?? "",
+      memberUserIds: department.memberUserIds,
+    });
+    setEditDepartmentId(departmentId);
+  };
+
+  const handleCloseEditModal = () => {
+    setEditDepartmentId(null);
+    setEditDraft(null);
+  };
+
+  const handleOpenDeleteModal = (departmentId: string) => {
+    setDeleteDepartmentId(departmentId);
+  };
+
+  const handleCloseDeleteModal = () => {
+    setDeleteDepartmentId(null);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editDraft || isSavingEdit) return;
     if (!canManage) {
       setAlert({
         type: "error",
@@ -148,49 +207,45 @@ export default function DepartmentManagementClient() {
       });
       return;
     }
-    const department = data.departments.find((dept) => dept.id === departmentId);
-    if (!department) {
-      setAlert({ type: "error", message: "Department not found." });
-      return;
-    }
-    const edits =
-      detailEdits[departmentId] ?? {
-        name: department.name ?? "",
-        code: department.code ?? "",
-        description: department.description ?? "",
-      };
-    const name = edits.name.trim();
+    const name = editDraft.name.trim();
     if (!name) {
       setAlert({ type: "error", message: "Department name cannot be empty." });
       return;
     }
-    const code = edits.code.trim() ? edits.code.trim() : null;
-    const description = edits.description.trim() ? edits.description.trim() : null;
-    setPendingDetailId(departmentId);
-    updateMutation.mutate(
-      {
-        departmentId,
+    const code = editDraft.code.trim() ? editDraft.code.trim() : null;
+    const description = editDraft.description.trim() ? editDraft.description.trim() : null;
+    const headUserId = editDraft.headUserId.trim() ? editDraft.headUserId : null;
+    setIsSavingEdit(true);
+    try {
+      await updateMutation.mutateAsync({
+        departmentId: editDraft.departmentId,
         name,
         code,
         description,
-      },
-      {
-        onSuccess: () => {
-          setAlert({ type: "success", message: `${name} has been updated.` });
-          setDetailEdits((prev) => {
-            const next = { ...prev };
-            delete next[departmentId];
-            return next;
-          });
-          void utils.hrDepartment.overview.invalidate();
-        },
-        onError: (error) => setAlert({ type: "error", message: error.message }),
-        onSettled: () => setPendingDetailId(null),
-      },
-    );
+      });
+      await assignHeadMutation.mutateAsync({
+        departmentId: editDraft.departmentId,
+        headUserId,
+      });
+      await assignMembersMutation.mutateAsync({
+        departmentId: editDraft.departmentId,
+        memberUserIds: Array.from(new Set(editDraft.memberUserIds)),
+      });
+      setAlert({ type: "success", message: `${name} has been updated.` });
+      handleCloseEditModal();
+      void utils.hrDepartment.overview.invalidate();
+    } catch (error) {
+      setAlert({
+        type: "error",
+        message: error instanceof Error ? error.message : "Unable to update department.",
+      });
+    } finally {
+      setIsSavingEdit(false);
+    }
   };
 
-  const handleSaveHead = (departmentId: string) => {
+  const handleConfirmDelete = async () => {
+    if (!deleteDepartmentId || isDeleting) return;
     if (!canManage) {
       setAlert({
         type: "error",
@@ -198,63 +253,20 @@ export default function DepartmentManagementClient() {
       });
       return;
     }
-    const selectedHead = headEdits[departmentId] ?? data.departments.find((dept) => dept.id === departmentId)?.headUserId ?? "";
-    setPendingHeadId(departmentId);
-    assignHeadMutation.mutate(
-      {
-        departmentId,
-        headUserId: selectedHead ? selectedHead : null,
-      },
-      {
-        onSuccess: () => {
-          setAlert({ type: "success", message: "Department manager updated." });
-          setHeadEdits((prev) => {
-            const next = { ...prev };
-            delete next[departmentId];
-            return next;
-          });
-          void utils.hrDepartment.overview.invalidate();
-        },
-        onError: (error) => setAlert({ type: "error", message: error.message }),
-        onSettled: () => setPendingHeadId(null),
-      },
-    );
-  };
-
-  const handleSaveMembers = (departmentId: string) => {
-    if (!canManage) {
+    setIsDeleting(true);
+    try {
+      await deleteMutation.mutateAsync({ departmentId: deleteDepartmentId });
+      setAlert({ type: "success", message: "Department deleted." });
+      handleCloseDeleteModal();
+      void utils.hrDepartment.overview.invalidate();
+    } catch (error) {
       setAlert({
         type: "error",
-        message: "Only org admins, org owners, or super admins can manage departments.",
+        message: error instanceof Error ? error.message : "Unable to delete department.",
       });
-      return;
+    } finally {
+      setIsDeleting(false);
     }
-    const department = data.departments.find((dept) => dept.id === departmentId);
-    if (!department) {
-      setAlert({ type: "error", message: "Department not found." });
-      return;
-    }
-    const selectedMembers = memberEdits[departmentId] ?? department.memberUserIds;
-    setPendingMembersId(departmentId);
-    assignMembersMutation.mutate(
-      {
-        departmentId,
-        memberUserIds: Array.from(new Set(selectedMembers)),
-      },
-      {
-        onSuccess: () => {
-          setAlert({ type: "success", message: "Department members updated." });
-          setMemberEdits((prev) => {
-            const next = { ...prev };
-            delete next[departmentId];
-            return next;
-          });
-          void utils.hrDepartment.overview.invalidate();
-        },
-        onError: (error) => setAlert({ type: "error", message: error.message }),
-        onSettled: () => setPendingMembersId(null),
-      },
-    );
   };
 
   return (
@@ -346,9 +358,9 @@ export default function DepartmentManagementClient() {
 
       <section className="space-y-4">
         <div className="flex flex-col gap-2">
-          <h2 className="text-2xl font-semibold text-slate-900 dark:text-white">Manage departments</h2>
+          <h2 className="text-2xl font-semibold text-slate-900 dark:text-white">Department list</h2>
           <p className="text-sm text-slate-500">
-            Update department details, assign managers, and keep members aligned.
+            View, edit, or delete departments directly from the table.
           </p>
         </div>
 
@@ -362,242 +374,330 @@ export default function DepartmentManagementClient() {
             </p>
           </div>
         ) : (
-          <div className="grid gap-6">
-            {data.departments.map((department) => {
-              const detailValues =
-                detailEdits[department.id] ?? {
-                  name: department.name ?? "",
-                  code: department.code ?? "",
-                  description: department.description ?? "",
-                };
-              const selectedHead =
-                headEdits[department.id] ?? department.headUserId ?? "";
-              const selectedMembers =
-                memberEdits[department.id] ?? department.memberUserIds;
-              const pendingDetails = pendingDetailId === department.id && updateMutation.isPending;
-              const pendingHead = pendingHeadId === department.id && assignHeadMutation.isPending;
-              const pendingMembers =
-                pendingMembersId === department.id && assignMembersMutation.isPending;
-              return (
-                <div
-                  key={department.id}
-                  className="space-y-6 rounded-3xl border border-slate-100 bg-white/90 p-6 shadow-sm dark:border-slate-700/70 dark:bg-slate-900/80"
-                >
-                  <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                        Department
-                      </p>
-                      <h3 className="text-2xl font-semibold text-slate-900 dark:text-white">
+          <div className="overflow-x-auto rounded-3xl border border-slate-100 bg-white/90 shadow-sm dark:border-slate-700/70 dark:bg-slate-900/80">
+            <table className="min-w-full text-left text-sm">
+              <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500 dark:bg-slate-900">
+                <tr>
+                  <th className="px-4 py-3">Department</th>
+                  <th className="px-4 py-3">Code</th>
+                  <th className="px-4 py-3">Manager</th>
+                  <th className="px-4 py-3 text-center">Members</th>
+                  <th className="px-4 py-3">Last updated</th>
+                  <th className="px-4 py-3 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.departments.map((department) => (
+                  <tr
+                    key={department.id}
+                    className="border-t border-slate-100 text-slate-700 dark:border-slate-800 dark:text-slate-200"
+                  >
+                    <td className="px-4 py-4 align-top">
+                      <p className="text-sm font-semibold text-slate-900 dark:text-white">
                         {department.name}
-                      </h3>
-                      <p className="text-sm text-slate-500">
-                        {department.description ?? "No description provided yet."}
                       </p>
-                    </div>
-                    <div className="rounded-2xl bg-slate-900/5 px-4 py-3 text-right text-slate-900 dark:bg-white/5 dark:text-white">
-                      <p className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                        Headcount
+                    </td>
+                    <td className="px-4 py-4 align-top text-sm text-slate-600 dark:text-slate-300">
+                      {department.code ?? "Not set"}
+                    </td>
+                    <td className="px-4 py-4 align-top">
+                      <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+                        {department.headName ?? "Unassigned"}
                       </p>
-                      <p className="text-3xl font-semibold">{department.memberCount}</p>
-                    </div>
-                  </div>
-
-                  <div className="grid gap-6 md:grid-cols-2">
-                    <div className="space-y-3">
-                      <div className="flex items-center gap-2">
-                        <FiLayers className="text-indigo-500" />
-                        <div>
-                          <p className="text-sm font-semibold text-slate-600">Department details</p>
-                          <p className="text-xs text-slate-500">
-                            Rename, update code, or document the scope.
-                          </p>
-                        </div>
-                      </div>
-                      <div className="space-y-3">
-                        <TextInput
-                          label="Name"
-                          value={detailValues.name}
-                          onChange={(event) =>
-                            setDetailEdits((prev) => ({
-                              ...prev,
-                              [department.id]: {
-                                ...detailValues,
-                                name: event.target.value,
-                              },
-                            }))
-                          }
-                          disabled={!canManage}
-                          className="w-full"
-                        />
-                        <TextInput
-                          label="Code"
-                          value={detailValues.code}
-                          onChange={(event) =>
-                            setDetailEdits((prev) => ({
-                              ...prev,
-                              [department.id]: {
-                                ...detailValues,
-                                code: event.target.value,
-                              },
-                            }))
-                          }
-                          disabled={!canManage}
-                          className="w-full"
-                        />
-                        <TextArea
-                          label="Mission / scope"
-                          value={detailValues.description}
-                          onChange={(event) =>
-                            setDetailEdits((prev) => ({
-                              ...prev,
-                              [department.id]: {
-                                ...detailValues,
-                                description: event.target.value,
-                              },
-                            }))
-                          }
-                          disabled={!canManage}
-                          height="110px"
-                          className="w-full"
-                        />
-                      </div>
-                      <Button
-                        theme="secondary"
-                        onClick={() => handleSaveDetails(department.id)}
-                        disabled={!canManage || pendingDetails}
-                      >
-                        {pendingDetails ? "Saving..." : "Save details"}
-                      </Button>
-                    </div>
-
-                    <div className="space-y-3">
-                      <div className="flex items-center gap-2">
-                        <FiUserCheck className="text-indigo-500" />
-                        <div>
-                          <p className="text-sm font-semibold text-slate-600">
-                            Department manager
-                          </p>
-                          <p className="text-xs text-slate-500">
-                            Choose who leads approvals and reports for this department.
-                          </p>
-                        </div>
-                      </div>
-                      <select
-                        value={selectedHead}
-                        onChange={(event) =>
-                          setHeadEdits((prev) => ({
-                            ...prev,
-                            [department.id]: event.target.value,
-                          }))
-                        }
-                        disabled={!canManage}
-                        className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100 disabled:opacity-60 dark:border-slate-700/70 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-slate-500 dark:focus:ring-slate-700/30"
-                      >
-                        <option value="">No manager assigned</option>
-                        {data.employees.map((employee) => (
-                          <option key={employee.userId} value={employee.userId}>
-                            {employee.fullName} {employee.designation ? `· ${employee.designation}` : ""}
-                          </option>
-                        ))}
-                      </select>
-                      <Button
-                        theme="secondary"
-                        onClick={() => handleSaveHead(department.id)}
-                        disabled={!canManage || pendingHead}
-                      >
-                        {pendingHead ? "Saving..." : "Save manager"}
-                      </Button>
-                      <div className="rounded-2xl border border-slate-200/70 bg-slate-50/80 p-4 dark:border-slate-700/70 dark:bg-slate-900/60">
-                        <p className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                          Current manager
-                        </p>
-                        {department.headName ? (
-                          <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">
-                            {department.headName}
-                          </p>
-                        ) : (
-                          <p className="text-sm text-slate-500">No manager assigned yet.</p>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-2">
-                      <FiUsers className="text-indigo-500" />
-                      <div>
-                        <p className="text-sm font-semibold text-slate-600">Members</p>
-                        <p className="text-xs text-slate-500">
-                          Select everyone who belongs to this department. They’ll appear in reports and invites.
-                        </p>
-                      </div>
-                    </div>
-                    <select
-                      multiple
-                      size={memberSelectSize}
-                      value={selectedMembers}
-                      onChange={(event) =>
-                        setMemberEdits((prev) => ({
-                          ...prev,
-                          [department.id]: Array.from(event.target.selectedOptions).map(
-                            (option) => option.value,
-                          ),
-                        }))
-                      }
-                      disabled={!canManage}
-                      className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-800 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100 disabled:opacity-60 dark:border-slate-700/70 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-slate-500 dark:focus:ring-slate-700/30"
-                    >
-                      {data.employees.length === 0 ? (
-                        <option value="" disabled>
-                          No employees available
-                        </option>
-                      ) : (
-                        data.employees.map((employee) => {
-                          const hints = [
-                            employee.designation ? `• ${employee.designation}` : null,
-                            employee.departmentName && employee.departmentId !== department.id
-                              ? `(Currently ${employee.departmentName})`
-                              : null,
-                          ]
-                            .filter(Boolean)
-                            .join(" ");
-                          return (
-                            <option key={employee.userId} value={employee.userId}>
-                              {employee.fullName} {hints}
-                            </option>
-                          );
-                        })
-                      )}
-                    </select>
-                    <Button
-                      theme="secondary"
-                      onClick={() => handleSaveMembers(department.id)}
-                      disabled={!canManage || pendingMembers}
-                    >
-                      {pendingMembers ? "Saving..." : "Save members"}
-                    </Button>
-                    <div className="space-y-2">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                        Member preview
+                      <p className="text-xs text-slate-500">
+                        {department.headEmail ?? "No manager email"}
                       </p>
-                      {department.memberPreview.length ? (
-                        <div className="flex flex-wrap gap-2">
-                          {department.memberPreview.map((member) => (
-                            <MemberPill key={member.userId} person={member} />
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="text-xs text-slate-500">No members assigned yet.</p>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
+                    </td>
+                    <td className="px-4 py-4 text-center text-sm font-semibold text-slate-700 dark:text-slate-200">
+                      {department.memberCount}
+                    </td>
+                    <td className="px-4 py-4 text-sm text-slate-500">
+                      {new Date(department.updatedAtIso).toLocaleDateString(undefined, {
+                        year: "numeric",
+                        month: "short",
+                        day: "numeric",
+                      })}
+                    </td>
+                    <td className="px-4 py-4">
+                      <div className="flex flex-wrap justify-end gap-2">
+                        <Button
+                          theme="white"
+                          className="px-3 py-2 text-xs"
+                          onClick={() => handleOpenViewModal(department.id)}
+                        >
+                          <FiEye className="mr-1.5" />
+                          View
+                        </Button>
+                        <Button
+                          theme="secondary"
+                          className="px-3 py-2 text-xs"
+                          onClick={() => handleOpenEditModal(department.id)}
+                          disabled={!canManage}
+                        >
+                          <FiEdit2 className="mr-1.5" />
+                          Edit
+                        </Button>
+                        <Button
+                          theme="cancel-secondary"
+                          className="px-3 py-2 text-xs"
+                          onClick={() => handleOpenDeleteModal(department.id)}
+                          disabled={!canManage}
+                        >
+                          <FiTrash2 className="mr-1.5" />
+                          Delete
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
       </section>
+
+      <Modal
+        open={Boolean(viewDepartmentId)}
+        setOpen={(open) => {
+          if (!open) {
+            setViewDepartmentId(null);
+          }
+        }}
+        title={viewDepartment ? `${viewDepartment.name} details` : "Department details"}
+        doneButtonText=""
+        isDoneButton={false}
+        isCancelButton
+        cancelButtonText="Close"
+      >
+        {viewDepartment ? (
+          <div className="space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Department code
+                </p>
+                <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+                  {viewDepartment.code ?? "Not set"}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Members
+                </p>
+                <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+                  {viewDepartment.memberCount} members
+                </p>
+              </div>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Manager
+                </p>
+                <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+                  {viewDepartment.headName ?? "Unassigned"}
+                </p>
+                <p className="text-xs text-slate-500">
+                  {viewDepartment.headEmail ?? "No manager email"}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Last updated
+                </p>
+                <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+                  {new Date(viewDepartment.updatedAtIso).toLocaleDateString(undefined, {
+                    year: "numeric",
+                    month: "short",
+                    day: "numeric",
+                  })}
+                </p>
+              </div>
+            </div>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Description
+              </p>
+              <p className="text-sm text-slate-600 dark:text-slate-300">
+                {viewDepartment.description ?? "No description provided."}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Members
+              </p>
+              {viewMembers.length ? (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {viewMembers.map((member) => (
+                    <MemberPill key={member.userId} person={member} />
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-slate-500">No members assigned yet.</p>
+              )}
+            </div>
+          </div>
+        ) : (
+          <p className="text-sm text-slate-600">Department not found.</p>
+        )}
+      </Modal>
+
+      <Modal
+        open={Boolean(editDepartmentId)}
+        setOpen={(open) => {
+          if (!open) {
+            handleCloseEditModal();
+          }
+        }}
+        title={editDepartment ? `Edit ${editDepartment.name}` : "Edit department"}
+        doneButtonText={isSavingEdit ? "Saving..." : "Save changes"}
+        cancelButtonText="Cancel"
+        isCancelButton
+        onDoneClick={handleSaveEdit}
+      >
+        {editDraft ? (
+          <div className="space-y-5">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <TextInput
+                label="Department name"
+                value={editDraft.name}
+                onChange={(event) =>
+                  setEditDraft((prev) =>
+                    prev ? { ...prev, name: event.target.value } : prev,
+                  )
+                }
+                disabled={!canManage || isSavingEdit}
+                className="w-full"
+              />
+              <TextInput
+                label="Department code"
+                value={editDraft.code}
+                onChange={(event) =>
+                  setEditDraft((prev) =>
+                    prev ? { ...prev, code: event.target.value } : prev,
+                  )
+                }
+                disabled={!canManage || isSavingEdit}
+                className="w-full"
+              />
+            </div>
+            <TextArea
+              label="Mission / scope"
+              value={editDraft.description}
+              onChange={(event) =>
+                setEditDraft((prev) =>
+                  prev ? { ...prev, description: event.target.value } : prev,
+                )
+              }
+              disabled={!canManage || isSavingEdit}
+              height="120px"
+              className="w-full"
+            />
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 text-slate-600">
+                <FiUserCheck className="text-indigo-500" />
+                <p className="text-sm font-semibold">Department manager</p>
+              </div>
+              <select
+                value={editDraft.headUserId}
+                onChange={(event) =>
+                  setEditDraft((prev) =>
+                    prev ? { ...prev, headUserId: event.target.value } : prev,
+                  )
+                }
+                disabled={!canManage || isSavingEdit}
+                className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100 disabled:opacity-60 dark:border-slate-700/70 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-slate-500 dark:focus:ring-slate-700/30"
+              >
+                <option value="">No manager assigned</option>
+                {data.employees.map((employee) => (
+                  <option key={employee.userId} value={employee.userId}>
+                    {employee.fullName} {employee.designation ? `· ${employee.designation}` : ""}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 text-slate-600">
+                <FiUsers className="text-indigo-500" />
+                <p className="text-sm font-semibold">Members</p>
+              </div>
+              <select
+                multiple
+                size={memberSelectSize}
+                value={editDraft.memberUserIds}
+                onChange={(event) =>
+                  setEditDraft((prev) =>
+                    prev
+                      ? {
+                          ...prev,
+                          memberUserIds: Array.from(event.target.selectedOptions).map(
+                            (option) => option.value,
+                          ),
+                        }
+                      : prev,
+                  )
+                }
+                disabled={!canManage || isSavingEdit}
+                className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-800 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100 disabled:opacity-60 dark:border-slate-700/70 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-slate-500 dark:focus:ring-slate-700/30"
+              >
+                {data.employees.length === 0 ? (
+                  <option value="" disabled>
+                    No employees available
+                  </option>
+                ) : (
+                  data.employees.map((employee) => {
+                    const hints = [
+                      employee.designation ? `• ${employee.designation}` : null,
+                      employee.departmentName && employee.departmentId !== editDraft.departmentId
+                        ? `(Currently ${employee.departmentName})`
+                        : null,
+                    ]
+                      .filter(Boolean)
+                      .join(" ");
+                    return (
+                      <option key={employee.userId} value={employee.userId}>
+                        {employee.fullName} {hints}
+                      </option>
+                    );
+                  })
+                )}
+              </select>
+            </div>
+          </div>
+        ) : (
+          <p className="text-sm text-slate-600">Department not found.</p>
+        )}
+      </Modal>
+
+      <Modal
+        open={Boolean(deleteDepartmentId)}
+        setOpen={(open) => {
+          if (!open) {
+            handleCloseDeleteModal();
+          }
+        }}
+        title="Delete department?"
+        doneButtonText=""
+        isDoneButton={false}
+        isCancelButton={false}
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-slate-600 dark:text-slate-300">
+            Delete {deleteDepartment?.name ?? "this department"}? Members will be unassigned from
+            this department.
+          </p>
+          <div className="flex flex-wrap justify-end gap-3">
+            <Button
+              theme="secondary"
+              onClick={handleCloseDeleteModal}
+              disabled={isDeleting}
+            >
+              Cancel
+            </Button>
+            <Button theme="cancel" onClick={handleConfirmDelete} disabled={isDeleting}>
+              {isDeleting ? "Deleting..." : "Delete department"}
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

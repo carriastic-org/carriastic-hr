@@ -6,6 +6,7 @@ import {
   type HrAssignDepartmentHeadInput,
   type HrAssignDepartmentMembersInput,
   type HrCreateDepartmentInput,
+  type HrDeleteDepartmentInput,
   type HrDepartmentManagementResponse,
   type HrDepartmentPerson,
   type HrUpdateDepartmentInput,
@@ -442,6 +443,59 @@ export const hrDepartmentService = {
           },
         });
       }
+    });
+  },
+
+  async deleteDepartment(ctx: TRPCContext, input: HrDeleteDepartmentInput) {
+    const viewer = requireDepartmentManager(ctx);
+    const organizationId = viewer.organizationId;
+
+    if (!organizationId) {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: "Join an organization to delete departments.",
+      });
+    }
+
+    const department = await ctx.prisma.department.findFirst({
+      where: { id: input.departmentId, organizationId },
+      select: {
+        id: true,
+        name: true,
+        _count: { select: { teams: true, employees: true } },
+      },
+    });
+
+    if (!department) {
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: "Department not found.",
+      });
+    }
+
+    if (department._count.teams > 0) {
+      throw new TRPCError({
+        code: "PRECONDITION_FAILED",
+        message: "Move or delete teams before removing this department.",
+      });
+    }
+
+    await ctx.prisma.$transaction(async (tx) => {
+      if (department._count.employees > 0) {
+        await tx.employmentDetail.updateMany({
+          where: {
+            organizationId,
+            departmentId: department.id,
+          },
+          data: {
+            departmentId: null,
+          },
+        });
+      }
+
+      await tx.department.delete({
+        where: { id: department.id },
+      });
     });
   },
 };

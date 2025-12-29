@@ -1,12 +1,21 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { FiAlertCircle, FiCheckCircle, FiUsers, FiUserPlus } from "react-icons/fi";
+import {
+  FiAlertCircle,
+  FiCheckCircle,
+  FiEdit2,
+  FiEye,
+  FiTrash2,
+  FiUsers,
+  FiUserPlus,
+} from "react-icons/fi";
 
 import Button from "@/app/components/atoms/buttons/Button";
 import TextInput from "@/app/components/atoms/inputs/TextInput";
 import TextArea from "@/app/components/atoms/inputs/TextArea";
 import LoadingSpinner from "@/app/components/LoadingSpinner";
+import { Modal } from "@/app/components/atoms/frame/Modal";
 import type { HrTeamPerson } from "@/types/hr-team";
 import { TEAM_MANAGEMENT_ROLES } from "@/types/hr-team";
 import { trpc } from "@/trpc/client";
@@ -50,14 +59,25 @@ const emptyStateIllustrations = [
   "Map teammates to squads so reporting stays accurate.",
 ];
 
+type TeamEditDraft = {
+  teamId: string;
+  name: string;
+  departmentId: string;
+  description: string;
+  leadUserIds: string[];
+  memberUserIds: string[];
+};
+
 export default function TeamManagementClient() {
   const utils = trpc.useUtils();
   const overviewQuery = trpc.hrTeam.overview.useQuery(undefined, {
     refetchOnWindowFocus: false,
   });
   const createTeamMutation = trpc.hrTeam.createTeam.useMutation();
+  const updateTeamMutation = trpc.hrTeam.updateTeam.useMutation();
   const assignLeadMutation = trpc.hrTeam.assignLead.useMutation();
   const assignMembersMutation = trpc.hrTeam.assignMembers.useMutation();
+  const deleteTeamMutation = trpc.hrTeam.deleteTeam.useMutation();
 
   const data = overviewQuery.data;
   const canManage = data?.canManage ?? false;
@@ -68,30 +88,18 @@ export default function TeamManagementClient() {
     description: "",
   });
   const [alert, setAlert] = useState<AlertState>(null);
-  const [pendingLeadTeam, setPendingLeadTeam] = useState<string | null>(null);
-  const [pendingMemberTeam, setPendingMemberTeam] = useState<string | null>(null);
-  const [leadEdits, setLeadEdits] = useState<Record<string, string[]>>({});
-  const [memberEdits, setMemberEdits] = useState<Record<string, string[]>>({});
+  const [viewTeamId, setViewTeamId] = useState<string | null>(null);
+  const [editTeamId, setEditTeamId] = useState<string | null>(null);
+  const [deleteTeamId, setDeleteTeamId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState<TeamEditDraft | null>(null);
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     if (!alert) return;
     const timer = window.setTimeout(() => setAlert(null), 5000);
     return () => window.clearTimeout(timer);
   }, [alert]);
-
-  const baseLeadSelection: Record<string, string[]> = data?.teams
-    ? data.teams.reduce<Record<string, string[]>>((acc, team) => {
-        acc[team.id] = team.leadUserIds;
-        return acc;
-      }, {})
-    : {};
-
-  const baseMemberSelection: Record<string, string[]> = data?.teams
-    ? data.teams.reduce<Record<string, string[]>>((acc, team) => {
-        acc[team.id] = team.memberUserIds;
-        return acc;
-      }, {})
-    : {};
 
   const memberSelectSize = useMemo(() => {
     const total = data?.employees.length ?? 4;
@@ -136,76 +144,106 @@ export default function TeamManagementClient() {
     );
   };
 
-  const handleLeadChange = (teamId: string, options: HTMLCollectionOf<HTMLOptionElement>) => {
-    const selectedValues = Array.from(options).map((option) => option.value);
-    setLeadEdits((prev) => ({ ...prev, [teamId]: selectedValues }));
+  const handleOpenViewModal = (teamId: string) => {
+    setViewTeamId(teamId);
   };
 
-  const handleMembersChange = (teamId: string, options: HTMLCollectionOf<HTMLOptionElement>) => {
-    const selectedValues = Array.from(options).map((option) => option.value);
-    setMemberEdits((prev) => ({ ...prev, [teamId]: selectedValues }));
+  const handleOpenEditModal = (teamId: string) => {
+    const team = data?.teams.find((item) => item.id === teamId);
+    if (!team) {
+      setAlert({ type: "error", message: "Team not found." });
+      return;
+    }
+    setEditDraft({
+      teamId: team.id,
+      name: team.name,
+      departmentId: team.departmentId,
+      description: team.description ?? "",
+      leadUserIds: team.leadUserIds,
+      memberUserIds: team.memberUserIds,
+    });
+    setEditTeamId(teamId);
   };
 
-  const handleSaveLead = (teamId: string) => {
+  const handleCloseEditModal = () => {
+    setEditTeamId(null);
+    setEditDraft(null);
+  };
+
+  const handleOpenDeleteModal = (teamId: string) => {
+    setDeleteTeamId(teamId);
+  };
+
+  const handleCloseDeleteModal = () => {
+    setDeleteTeamId(null);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editDraft || isSavingEdit) return;
     if (!canManage) {
       setAlert({
         type: "error",
-        message: "Only manager, org admin, org owner, or super admin roles can change leads.",
+        message: "Only managers, org admins, org owners, or super admins can change teams.",
       });
       return;
     }
-    const selectedLeads = leadEdits[teamId] ?? baseLeadSelection[teamId] ?? [];
-    setPendingLeadTeam(teamId);
-    assignLeadMutation.mutate(
-      {
-        teamId,
-        leadUserIds: selectedLeads,
-      },
-      {
-        onSuccess: () => {
-          setLeadEdits((prev) => {
-            const next = { ...prev };
-            delete next[teamId];
-            return next;
-          });
-          setAlert({ type: "success", message: "Team lead updated." });
-          void utils.hrTeam.overview.invalidate();
-        },
-        onError: (error) => setAlert({ type: "error", message: error.message }),
-        onSettled: () => setPendingLeadTeam(null),
-      },
-    );
+    const name = editDraft.name.trim();
+    if (!name || !editDraft.departmentId) {
+      setAlert({ type: "error", message: "Provide both a team name and a department." });
+      return;
+    }
+    setIsSavingEdit(true);
+    try {
+      await updateTeamMutation.mutateAsync({
+        teamId: editDraft.teamId,
+        name,
+        departmentId: editDraft.departmentId,
+        description: editDraft.description.trim() ? editDraft.description.trim() : null,
+      });
+      await assignLeadMutation.mutateAsync({
+        teamId: editDraft.teamId,
+        leadUserIds: Array.from(new Set(editDraft.leadUserIds)),
+      });
+      await assignMembersMutation.mutateAsync({
+        teamId: editDraft.teamId,
+        memberUserIds: Array.from(new Set(editDraft.memberUserIds)),
+      });
+      setAlert({ type: "success", message: "Team updated successfully." });
+      handleCloseEditModal();
+      void utils.hrTeam.overview.invalidate();
+    } catch (error) {
+      setAlert({
+        type: "error",
+        message: error instanceof Error ? error.message : "Unable to update team.",
+      });
+    } finally {
+      setIsSavingEdit(false);
+    }
   };
 
-  const handleSaveMembers = (teamId: string) => {
+  const handleConfirmDelete = async () => {
+    if (!deleteTeamId || isDeleting) return;
     if (!canManage) {
       setAlert({
         type: "error",
-        message: "You need manager, org admin, org owner, or super admin rights to change members.",
+        message: "Only managers, org admins, org owners, or super admins can change teams.",
       });
       return;
     }
-    const selectedMembers = memberEdits[teamId] ?? baseMemberSelection[teamId] ?? [];
-    setPendingMemberTeam(teamId);
-    assignMembersMutation.mutate(
-      {
-        teamId,
-        memberUserIds: selectedMembers,
-      },
-      {
-        onSuccess: () => {
-          setMemberEdits((prev) => {
-            const next = { ...prev };
-            delete next[teamId];
-            return next;
-          });
-          setAlert({ type: "success", message: "Team members updated." });
-          void utils.hrTeam.overview.invalidate();
-        },
-        onError: (error) => setAlert({ type: "error", message: error.message }),
-        onSettled: () => setPendingMemberTeam(null),
-      },
-    );
+    setIsDeleting(true);
+    try {
+      await deleteTeamMutation.mutateAsync({ teamId: deleteTeamId });
+      setAlert({ type: "success", message: "Team deleted." });
+      handleCloseDeleteModal();
+      void utils.hrTeam.overview.invalidate();
+    } catch (error) {
+      setAlert({
+        type: "error",
+        message: error instanceof Error ? error.message : "Unable to delete team.",
+      });
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   if (overviewQuery.isLoading) {
@@ -233,6 +271,19 @@ export default function TeamManagementClient() {
   if (!data) {
     return null;
   }
+
+  const viewTeam = viewTeamId
+    ? data.teams.find((team) => team.id === viewTeamId) ?? null
+    : null;
+  const editTeam = editTeamId
+    ? data.teams.find((team) => team.id === editTeamId) ?? null
+    : null;
+  const deleteTeam = deleteTeamId
+    ? data.teams.find((team) => team.id === deleteTeamId) ?? null
+    : null;
+  const viewMembers = viewTeam
+    ? data.employees.filter((employee) => viewTeam.memberUserIds.includes(employee.userId))
+    : [];
 
   const viewerRole = data.viewerRole;
   const roleList = TEAM_MANAGEMENT_ROLES.join(", ");
@@ -338,9 +389,9 @@ export default function TeamManagementClient() {
 
       <section className="space-y-4">
         <div className="flex flex-col gap-2">
-          <h2 className="text-2xl font-semibold text-slate-900 dark:text-white">Manage teams</h2>
+          <h2 className="text-2xl font-semibold text-slate-900 dark:text-white">Team list</h2>
           <p className="text-sm text-slate-500">
-            Assign leads, map members, and keep an eye on who still needs placement.
+            View, edit, or delete teams directly from the table.
           </p>
         </div>
 
@@ -356,160 +407,341 @@ export default function TeamManagementClient() {
             </ul>
           </div>
         ) : (
-          <div className="grid gap-6">
-            {data.teams.map((team) => {
-              const memberValues =
-                memberEdits[team.id] ?? baseMemberSelection[team.id] ?? team.memberUserIds;
-              const selectedLeadValues =
-                leadEdits[team.id] ?? baseLeadSelection[team.id] ?? [];
-              const pendingLead = pendingLeadTeam === team.id && assignLeadMutation.isPending;
-              const pendingMembers =
-                pendingMemberTeam === team.id && assignMembersMutation.isPending;
-              return (
-                <div
-                  key={team.id}
-                  className="space-y-6 rounded-3xl border border-slate-100 bg-white/90 p-6 shadow-sm dark:border-slate-700/70 dark:bg-slate-900/80"
-                >
-                  <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+          <div className="overflow-x-auto rounded-3xl border border-slate-100 bg-white/90 shadow-sm dark:border-slate-700/70 dark:bg-slate-900/80">
+            <table className="min-w-full text-left text-sm">
+              <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500 dark:bg-slate-900">
+                <tr>
+                  <th className="px-4 py-3">Team</th>
+                  <th className="px-4 py-3">Department</th>
+                  <th className="px-4 py-3">Leads</th>
+                  <th className="px-4 py-3 text-center">Members</th>
+                  <th className="px-4 py-3 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.teams.map((team) => {
+                  const leadNames = team.leads.slice(0, 2).map((lead) => lead.fullName).join(", ");
+                  return (
+                    <tr
+                      key={team.id}
+                      className="border-t border-slate-100 text-slate-700 dark:border-slate-800 dark:text-slate-200"
+                    >
+                      <td className="px-4 py-4 align-top">
+                        <p className="text-sm font-semibold text-slate-900 dark:text-white">
+                          {team.name}
+                        </p>
+                      </td>
+                      <td className="px-4 py-4 align-top text-sm text-slate-600 dark:text-slate-300">
                         {team.departmentName}
-                      </p>
-                      <h3 className="text-2xl font-semibold text-slate-900 dark:text-white">
-                        {team.name}
-                      </h3>
-                      <p className="text-sm text-slate-500">
-                        {team.description ?? "No description provided yet."}
-                      </p>
-                    </div>
-                    <div className="rounded-2xl bg-slate-900/5 px-4 py-3 text-right text-slate-900 dark:bg-white/5 dark:text-white">
-                      <p className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                        Headcount
-                      </p>
-                      <p className="text-3xl font-semibold">{team.memberCount}</p>
-                    </div>
-                  </div>
-                  <div className="grid gap-6 md:grid-cols-2">
-                    <div className="space-y-3">
-                      <div className="space-y-1">
-                        <p className="text-sm font-semibold text-slate-600">Team leads</p>
+                      </td>
+                      <td className="px-4 py-4 align-top">
+                        <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+                          {team.leads.length ? `${team.leads.length} lead${team.leads.length === 1 ? "" : "s"}` : "No leads"}
+                        </p>
                         <p className="text-xs text-slate-500">
-                          Pick who owns rituals, sprint plans, and approvals. Multiple leads are
-                          supported.
+                          {leadNames || "Assign a lead"}
                         </p>
-                      </div>
-                      <select
-                        multiple
-                        size={leadSelectSize}
-                        value={selectedLeadValues}
-                        onChange={(event) => handleLeadChange(team.id, event.target.selectedOptions)}
-                        disabled={!canManage}
-                        className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-800 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100 disabled:opacity-60 dark:border-slate-700/70 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-slate-500 dark:focus:ring-slate-700/30"
-                      >
-                        {data.employees.map((employee) => {
-                          const statusHints = [
-                            employee.designation ? `• ${employee.designation}` : null,
-                            employee.teamName && employee.teamId !== team.id
-                              ? `(Currently ${employee.teamName})`
-                              : null,
-                            employee.isTeamLead ? "(Team Lead)" : null,
-                          ]
-                            .filter(Boolean)
-                            .join(" ");
-                          return (
-                            <option key={employee.userId} value={employee.userId}>
-                              {employee.fullName} {statusHints}
-                            </option>
-                          );
-                        })}
-                      </select>
-                      <Button
-                        theme="secondary"
-                        onClick={() => handleSaveLead(team.id)}
-                        disabled={!canManage || pendingLead}
-                      >
-                        {pendingLead ? "Saving..." : "Save leads"}
-                      </Button>
-                      <div className="space-y-2">
-                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                          Assigned leads
-                        </p>
-                        {team.leads.length ? (
-                          <div className="flex flex-wrap gap-2">
-                            {team.leads.map((lead) => (
-                              <MemberPill key={lead.userId} person={lead} />
-                            ))}
-                          </div>
-                        ) : (
-                          <p className="text-xs text-slate-500">No leads set for this team.</p>
-                        )}
-                      </div>
-                    </div>
-                    <div className="space-y-3">
-                      <div className="space-y-1">
-                        <p className="text-sm font-semibold text-slate-600">Members</p>
-                        <p className="text-xs text-slate-500">
-                          Multi-select teammates to invite them into this pod.
-                        </p>
-                      </div>
-                      <select
-                        multiple
-                        size={memberSelectSize}
-                        value={memberValues}
-                        onChange={(event) => handleMembersChange(team.id, event.target.selectedOptions)}
-                        disabled={!canManage}
-                        className="w-full rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 shadow-inner shadow-slate-100 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100 disabled:opacity-60 dark:border-slate-700/70 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-slate-500 dark:focus:ring-slate-700/30"
-                      >
-                        {data.employees.map((employee) => {
-                          const placementHint =
-                            employee.teamName && employee.teamId !== team.id
-                              ? `Currently ${employee.teamName}`
-                              : employee.teamName
-                                ? "Already here"
-                                : "Unassigned";
-                          const extraHints = [
-                            employee.designation ? employee.designation : null,
-                            placementHint,
-                            employee.isTeamLead ? "Team Lead" : null,
-                          ]
-                            .filter(Boolean)
-                            .join(" • ");
-                          return (
-                            <option key={employee.userId} value={employee.userId}>
-                              {employee.fullName}
-                              {extraHints ? ` (${extraHints})` : ""}
-                            </option>
-                          );
-                        })}
-                      </select>
-                      <Button
-                        onClick={() => handleSaveMembers(team.id)}
-                        disabled={!canManage || pendingMembers}
-                      >
-                        {pendingMembers ? "Updating..." : "Update members"}
-                      </Button>
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <p className="text-sm font-semibold text-slate-600">
-                      Snapshot ({team.memberCount} teammate{team.memberCount === 1 ? "" : "s"})
-                    </p>
-                    {team.memberPreview.length ? (
-                      <div className="flex flex-wrap gap-3">
-                        {team.memberPreview.map((member) => (
-                          <MemberPill key={member.userId} person={member} />
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="text-sm text-slate-500">No members assigned yet.</p>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
+                      </td>
+                      <td className="px-4 py-4 text-center text-sm font-semibold text-slate-700 dark:text-slate-200">
+                        {team.memberCount}
+                      </td>
+                      <td className="px-4 py-4">
+                        <div className="flex flex-wrap justify-end gap-2">
+                          <Button
+                            theme="white"
+                            className="px-3 py-2 text-xs"
+                            onClick={() => handleOpenViewModal(team.id)}
+                          >
+                            <FiEye className="mr-1.5" />
+                            View
+                          </Button>
+                          <Button
+                            theme="secondary"
+                            className="px-3 py-2 text-xs"
+                            onClick={() => handleOpenEditModal(team.id)}
+                            disabled={!canManage}
+                          >
+                            <FiEdit2 className="mr-1.5" />
+                            Edit
+                          </Button>
+                          <Button
+                            theme="cancel-secondary"
+                            className="px-3 py-2 text-xs"
+                            onClick={() => handleOpenDeleteModal(team.id)}
+                            disabled={!canManage}
+                          >
+                            <FiTrash2 className="mr-1.5" />
+                            Delete
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         )}
       </section>
+
+      <Modal
+        open={Boolean(viewTeamId)}
+        setOpen={(open) => {
+          if (!open) {
+            setViewTeamId(null);
+          }
+        }}
+        title={viewTeam ? `${viewTeam.name} details` : "Team details"}
+        doneButtonText=""
+        isDoneButton={false}
+        isCancelButton
+        cancelButtonText="Close"
+      >
+        {viewTeam ? (
+          <div className="space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Department
+                </p>
+                <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+                  {viewTeam.departmentName}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Members
+                </p>
+                <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+                  {viewTeam.memberCount} teammate{viewTeam.memberCount === 1 ? "" : "s"}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Leads
+                </p>
+                <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+                  {viewTeam.leads.length ? `${viewTeam.leads.length} lead${viewTeam.leads.length === 1 ? "" : "s"}` : "No leads"}
+                </p>
+              </div>
+            </div>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Description
+              </p>
+              <p className="text-sm text-slate-600 dark:text-slate-300">
+                {viewTeam.description ?? "No description provided."}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Leads
+              </p>
+              {viewTeam.leads.length ? (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {viewTeam.leads.map((lead) => (
+                    <MemberPill key={lead.userId} person={lead} />
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-slate-500">No leads assigned yet.</p>
+              )}
+            </div>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Members
+              </p>
+              {viewMembers.length ? (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {viewMembers.map((member) => (
+                    <MemberPill key={member.userId} person={member} />
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-slate-500">No members assigned yet.</p>
+              )}
+            </div>
+          </div>
+        ) : (
+          <p className="text-sm text-slate-600">Team not found.</p>
+        )}
+      </Modal>
+
+      <Modal
+        open={Boolean(editTeamId)}
+        setOpen={(open) => {
+          if (!open) {
+            handleCloseEditModal();
+          }
+        }}
+        title={editTeam ? `Edit ${editTeam.name}` : "Edit team"}
+        doneButtonText={isSavingEdit ? "Saving..." : "Save changes"}
+        cancelButtonText="Cancel"
+        isCancelButton
+        onDoneClick={handleSaveEdit}
+      >
+        {editDraft ? (
+          <div className="space-y-5">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <TextInput
+                label="Team name"
+                value={editDraft.name}
+                onChange={(event) =>
+                  setEditDraft((prev) =>
+                    prev ? { ...prev, name: event.target.value } : prev,
+                  )
+                }
+                disabled={!canManage || isSavingEdit}
+                className="w-full"
+              />
+              <div className="space-y-2">
+                <label className="text-sm font-semibold text-slate-600">Department</label>
+                <select
+                  value={editDraft.departmentId}
+                  onChange={(event) =>
+                    setEditDraft((prev) =>
+                      prev ? { ...prev, departmentId: event.target.value } : prev,
+                    )
+                  }
+                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100 dark:border-slate-700/70 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-slate-500 dark:focus:ring-slate-700/30"
+                  disabled={!canManage || isSavingEdit}
+                >
+                  <option value="">Select a department</option>
+                  {data.departments.map((department) => (
+                    <option key={department.id} value={department.id}>
+                      {department.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <TextArea
+              label="Team mission"
+              value={editDraft.description}
+              onChange={(event) =>
+                setEditDraft((prev) =>
+                  prev ? { ...prev, description: event.target.value } : prev,
+                )
+              }
+              disabled={!canManage || isSavingEdit}
+              height="120px"
+              className="w-full"
+            />
+            <div className="space-y-2">
+              <p className="text-sm font-semibold text-slate-600">Team leads</p>
+              <select
+                multiple
+                size={leadSelectSize}
+                value={editDraft.leadUserIds}
+                onChange={(event) =>
+                  setEditDraft((prev) =>
+                    prev
+                      ? {
+                          ...prev,
+                          leadUserIds: Array.from(event.target.selectedOptions).map(
+                            (option) => option.value,
+                          ),
+                        }
+                      : prev,
+                  )
+                }
+                disabled={!canManage || isSavingEdit}
+                className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-800 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100 disabled:opacity-60 dark:border-slate-700/70 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-slate-500 dark:focus:ring-slate-700/30"
+              >
+                {data.employees.map((employee) => {
+                  const statusHints = [
+                    employee.designation ? `• ${employee.designation}` : null,
+                    employee.teamName && employee.teamId !== editDraft.teamId
+                      ? `(Currently ${employee.teamName})`
+                      : null,
+                    employee.isTeamLead ? "(Team Lead)" : null,
+                  ]
+                    .filter(Boolean)
+                    .join(" ");
+                  return (
+                    <option key={employee.userId} value={employee.userId}>
+                      {employee.fullName} {statusHints}
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
+            <div className="space-y-2">
+              <p className="text-sm font-semibold text-slate-600">Members</p>
+              <select
+                multiple
+                size={memberSelectSize}
+                value={editDraft.memberUserIds}
+                onChange={(event) =>
+                  setEditDraft((prev) =>
+                    prev
+                      ? {
+                          ...prev,
+                          memberUserIds: Array.from(event.target.selectedOptions).map(
+                            (option) => option.value,
+                          ),
+                        }
+                      : prev,
+                  )
+                }
+                disabled={!canManage || isSavingEdit}
+                className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-800 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100 disabled:opacity-60 dark:border-slate-700/70 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-slate-500 dark:focus:ring-slate-700/30"
+              >
+                {data.employees.map((employee) => {
+                  const placementHint =
+                    employee.teamName && employee.teamId !== editDraft.teamId
+                      ? `Currently ${employee.teamName}`
+                      : employee.teamName
+                        ? "Already here"
+                        : "Unassigned";
+                  const extraHints = [
+                    employee.designation ? employee.designation : null,
+                    placementHint,
+                    employee.isTeamLead ? "Team Lead" : null,
+                  ]
+                    .filter(Boolean)
+                    .join(" • ");
+                  return (
+                    <option key={employee.userId} value={employee.userId}>
+                      {employee.fullName}
+                      {extraHints ? ` (${extraHints})` : ""}
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
+          </div>
+        ) : (
+          <p className="text-sm text-slate-600">Team not found.</p>
+        )}
+      </Modal>
+
+      <Modal
+        open={Boolean(deleteTeamId)}
+        setOpen={(open) => {
+          if (!open) {
+            handleCloseDeleteModal();
+          }
+        }}
+        title="Delete team?"
+        doneButtonText=""
+        isDoneButton={false}
+        isCancelButton={false}
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-slate-600 dark:text-slate-300">
+            Delete {deleteTeam?.name ?? "this team"}? Members will be unassigned from this team.
+          </p>
+          <div className="flex flex-wrap justify-end gap-3">
+            <Button theme="secondary" onClick={handleCloseDeleteModal} disabled={isDeleting}>
+              Cancel
+            </Button>
+            <Button theme="cancel" onClick={handleConfirmDelete} disabled={isDeleting}>
+              {isDeleting ? "Deleting..." : "Delete team"}
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
