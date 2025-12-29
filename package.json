@@ -1,0 +1,61 @@
+{
+  "name": "hr-mgt",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint",
+    "postinstall": "prisma generate"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.932.0",
+    "@hookform/resolvers": "^5.2.2",
+    "@premieroctet/next-admin": "^8.3.0",
+    "@prisma/client": "^6.19.0",
+    "@tanstack/react-query": "^5.90.9",
+    "@trpc/client": "^11.7.1",
+    "@trpc/react-query": "^11.7.1",
+    "@trpc/server": "^11.7.1",
+    "@types/jszip": "^3.4.0",
+    "@types/nodemailer": "^7.0.4",
+    "bcryptjs": "^3.0.3",
+    "cookie": "^1.0.2",
+    "html2pdf.js": "^0.12.1",
+    "jsonwebtoken": "^9.0.2",
+    "jszip": "^3.10.1",
+    "next": "16.0.7",
+    "next-auth": "^4.24.13",
+    "nodemailer": "^7.0.10",
+    "prisma": "^6.19.0",
+    "react": "19.2.0",
+    "react-datepicker": "^8.9.0",
+    "react-dom": "19.2.0",
+    "react-hook-form": "^7.66.0",
+    "react-icons": "^5.5.0",
+    "react-paginate": "^8.3.0",
+    "socket.io": "^4.8.1",
+    "socket.io-client": "^4.8.1",
+    "xlsx-js-style": "^1.2.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "autoprefixer": "^10.4.20",
+    "daisyui": "^4.12.14",
+    "eslint": "^9",
+    "eslint-config-next": "16.0.7",
+    "postcss": "^8.4.49",
+    "tailwind-scrollbar": "^3.1.0",
+    "tailwindcss": "^3.4.15",
+    "tsx": "^4.20.6",
+    "typescript": "^5"
+  }
+}
