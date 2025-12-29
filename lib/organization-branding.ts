@@ -1,1 +1,1 @@
-export const DEFAULT_ORGANIZATION_LOGO = "/logo/demo.logo.png";
+export const DEFAULT_ORGANIZATION_LOGO = "/logo/app_icon.png";

@@ -1,6 +1,6 @@
-# NDI HR Management
+# Carriastic HR Management
 
-NDI HR Management is a **single-tenant** workforce operations portal built with Next.js 16, React 19, tRPC, and Prisma. A single deployment powers one organization’s HR team and employees, covering onboarding, attendance, time-off, invoices, projects, and internal comms. The system relies on PostgreSQL for state, S3-compatible storage for documents, and Socket.IO for live updates.
+Carriastic HR Management is a **single-tenant** workforce operations portal built with Next.js 16, React 19, tRPC, and Prisma. A single deployment powers one organization’s HR team and employees, covering onboarding, attendance, time-off, invoices, projects, and internal comms. The system relies on PostgreSQL for state, S3-compatible storage for documents, and Socket.IO for live updates.
 
 ---
 
@@ -43,7 +43,7 @@ NDI HR Management is a **single-tenant** workforce operations portal built with 
 1. **Clone & install**
    ```bash
    git clone <repo-url>
-   cd ndi-hr-mgt
+   cd carriastic-hr
    npm install
    ```
 2. **Configure environment variables** — Create `.env` with the values listed below.

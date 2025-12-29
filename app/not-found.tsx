@@ -73,9 +73,9 @@ export default function NotFoundPage() {
               Need urgent help? Email{" "}
               <a
                 className="font-semibold text-indigo-600 hover:underline dark:text-sky-400"
-                href="mailto:hr@ndi.hr"
+                href="mailto:hr@carriastic.com"
               >
-                hr@ndi.hr
+                hr@carriastic.com
               </a>{" "}
               and we&apos;ll jump in.
             </div>

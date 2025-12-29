@@ -828,10 +828,10 @@ export default function LeaveApplicationPage() {
                   <div className="rounded-2xl border border-dashed border-slate-200 px-4 py-3 text-sm text-slate-500 transition-colors duration-200 dark:border-slate-700/60 dark:text-slate-400">
                     Need support? Ping {" "}
                     <a
-                      href="mailto:hr@ndi.hr"
+                      href="mailto:hr@carriastic.com"
                       className="font-semibold text-primary_dark dark:text-sky-400"
                     >
-                      hr@ndi.hr
+                      hr@carriastic.com
                     </a>{" "}
                     or talk to your manager before submitting.
                   </div>

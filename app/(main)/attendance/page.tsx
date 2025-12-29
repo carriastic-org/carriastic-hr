@@ -11,7 +11,7 @@ import LoadingSpinner from "../../components/LoadingSpinner";
 import { trpc } from "@/trpc/client";
 import { Card } from "@/app/components/atoms/frame/Card";
 
-const STORAGE_KEY = "ndi.attendance.timer.v1";
+const STORAGE_KEY = "carriastic.attendance.timer.v1";
 const MAX_WORK_SECONDS = 8 * 60 * 60;
 
 const backendStatuses = [

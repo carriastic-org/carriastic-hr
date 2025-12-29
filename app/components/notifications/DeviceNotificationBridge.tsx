@@ -7,7 +7,7 @@ import { useRealtimeSocket } from "@/app/components/realtime/RealtimeProvider";
 import type { DeviceNotificationPayload } from "@/types/realtime";
 import { trpc } from "@/trpc/client";
 
-const DEVICE_ICON = "/logo/demo.logo.png";
+const DEVICE_ICON = "/logo/app_icon.png";
 
 export const DeviceNotificationBridge = () => {
   const socket = useRealtimeSocket();

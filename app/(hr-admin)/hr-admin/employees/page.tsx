@@ -727,7 +727,7 @@ export default function EmployeeManagementPage() {
             />
             <TextInput
               label="Employee ID"
-              placeholder="e.g. NDI-0102"
+              placeholder="e.g. Carriastic-0102"
               className="w-full"
               name="employeeCode"
               register={inviteRegister}

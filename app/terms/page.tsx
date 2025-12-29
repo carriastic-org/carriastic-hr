@@ -70,7 +70,7 @@ const keyFacts = [
   { label: "Effective date", value: "05 Jan 2025" },
   { label: "Last update", value: "05 Jan 2025" },
   { label: "Governing law", value: "England & Wales" },
-  { label: "Contact", value: "legal@ndi.hr" },
+  { label: "Contact", value: "legal@carriastic.com" },
 ];
 
 const procurementChecklist = [
@@ -137,7 +137,7 @@ function TermsPage() {
               ))}
             </div>
             <div className="mt-6 rounded-2xl border border-slate-200 bg-white/80 p-4 text-sm text-slate-600 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300">
-              Need an executed copy, DPA, or SCCs? Email <a className="font-semibold" href="mailto:legal@ndi.hr">legal@ndi.hr</a> and we’ll respond within one business day.
+              Need an executed copy, DPA, or SCCs? Email <a className="font-semibold" href="mailto:legal@carriastic.com">legal@carriastic.com</a> and we’ll respond within one business day.
             </div>
           </div>
         </section>
@@ -201,7 +201,7 @@ function TermsPage() {
             </div>
             <div className="mt-4 flex flex-wrap gap-3">
               <a
-                href="mailto:support@ndi.hr"
+                href="mailto:support@carriastic.com"
                 className="inline-flex items-center rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800"
               >
                 Coordinate with support
@@ -225,7 +225,7 @@ function TermsPage() {
               </p>
             </div>
             <a
-              href="mailto:legal@ndi.hr?subject=NDI%20HR%20Terms%20Amendment"
+              href="mailto:legal@carriastic.com?subject=Carriastic%20HR%20Terms%20Amendment"
               className="inline-flex items-center rounded-xl border border-transparent bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 dark:bg-indigo-600 dark:hover:bg-indigo-500"
             >
               Start a legal review

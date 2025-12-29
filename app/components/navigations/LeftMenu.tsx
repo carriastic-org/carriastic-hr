@@ -105,7 +105,7 @@ const LeftMenu = ({
   isLeader = false,
   canAccessHrAdmin = false,
   className = "",
-  organizationName = "Demo Company",
+  organizationName = "Carriastic",
   userFullName,
   organizationLogoUrl = DEFAULT_ORGANIZATION_LOGO,
 }: Props) => {

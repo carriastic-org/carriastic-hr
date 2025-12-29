@@ -14,11 +14,11 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "HR Management",
+  title: "Carriastic HR",
   description:
     "A modern workspace to track attendance, manage leave, and stay connected with your team.",
   icons: {
-    icon: "/logo/demo.logo.png",
+    icon: "/logo/app_icon.png",
   },
 };
 

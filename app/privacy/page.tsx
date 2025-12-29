@@ -104,13 +104,13 @@ const requestChannels = [
   {
     title: "Rectification",
     description: "Submit corrections with employee ID + field list. We update and keep an audit trail.",
-    channel: "privacy@ndi.hr",
+    channel: "privacy@carriastic.com",
     sla: "< 48h",
   },
   {
     title: "Deletion",
     description: "Request employee-level or workspace-level deletion. Backups purge automatically afterward.",
-    channel: "privacy@ndi.hr",
+    channel: "privacy@carriastic.com",
     sla: "< 30 days",
   },
 ];
@@ -160,7 +160,7 @@ function PrivacyPage() {
             </div>
             <div className="mt-6 rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-emerald-50">
               Daily automated monitoring + quarterly penetration tests keep controls provable. Need a DPA or
-              pen-test summary? Email <a className="underline" href="mailto:privacy@ndi.hr">privacy@ndi.hr</a>.
+              pen-test summary? Email <a className="underline" href="mailto:privacy@carriastic.com">privacy@carriastic.com</a>.
             </div>
           </div>
         </section>
@@ -258,12 +258,12 @@ function PrivacyPage() {
           <div className="rounded-[28px] border border-emerald-200/40 bg-emerald-500/15 p-8 text-emerald-50">
             <h3 className="text-2xl font-semibold text-white">Questions, audits, or DPAs?</h3>
             <p className="mt-2 text-sm text-emerald-100">
-              Email privacy@ndi.hr for a signed data processing agreement, a list of sub‑processors, or to
+              Email privacy@carriastic.com for a signed data processing agreement, a list of sub‑processors, or to
               schedule a compliance review. We typically reply same business day.
             </p>
             <div className="mt-4 flex flex-wrap gap-3">
               <a
-                href="mailto:privacy@ndi.hr"
+                href="mailto:privacy@carriastic.com"
                 className="inline-flex items-center rounded-xl border border-white/30 px-4 py-2 text-sm font-semibold text-white hover:bg-white/10"
               >
                 Contact privacy team

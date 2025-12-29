@@ -33,7 +33,7 @@ const heroStats = [
 const supportChannels = [
   {
     label: "Email",
-    value: "support@ndi.hr",
+    value: "support@carriastic.com",
     helper: "Average response < 2 hours on business days",
   },
   {
@@ -48,9 +48,9 @@ const supportChannels = [
   },
   {
     label: "Status page",
-    value: "status.ndi.hr",
+    value: "status.carriastic.com",
     helper: "Realtime maintenance + incident notes",
-    href: "https://status.ndi.hr",
+    href: "https://status.carriastic.com",
   },
 ];
 
@@ -115,8 +115,8 @@ const resourceLibrary = [
   {
     title: "Live status page",
     description: "Realtime availability for payroll, leave, integrations, and webhooks.",
-    action: "Check status.ndi.hr",
-    href: "https://status.ndi.hr",
+    action: "Check status.carriastic.com",
+    href: "https://status.carriastic.com",
     external: true,
   },
 ];
@@ -139,7 +139,7 @@ const faqs = [
   },
   {
     question: "Who do I contact for technical issues?",
-    answer: "Use the form on this page or email support@ndi.hr for assistance.",
+    answer: "Use the form on this page or email support@carriastic.com for assistance.",
   },
   {
     question: "How do I submit a leave request?",
@@ -406,7 +406,7 @@ function SupportPage() {
               </ul>
               <div className="mt-4 flex flex-wrap gap-3">
                 <a
-                  href="mailto:support@ndi.hr"
+                  href="mailto:support@carriastic.com"
                   className="inline-flex items-center rounded-xl border border-white/30 px-4 py-2 text-sm font-semibold text-white hover:bg-white/10"
                 >
                   Email support desk

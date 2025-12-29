@@ -27,8 +27,8 @@ function Header() {
       >
         <span className="inline-flex h-12 w-12 items-center justify-center rounded-2xl shadow-lg shadow-indigo-500/30">
           <Image
-            src="/logo/demo.logo.png"
-            alt="HR Management"
+            src="/logo/app_icon.png"
+            alt="Carriastic HR"
             width={36}
             height={36}
             className="h-9 w-9 object-contain"
@@ -37,10 +37,10 @@ function Header() {
         </span>
         <div className="hidden flex-col sm:flex">
           <span className="text-sm font-semibold uppercase tracking-[0.3em] text-slate-500 dark:text-slate-400">
-            Demo
+            Carriastic
           </span>
           <span className="text-base font-semibold leading-tight">
-            Demo Organization
+            HR Management
           </span>
         </div>
       </button>
