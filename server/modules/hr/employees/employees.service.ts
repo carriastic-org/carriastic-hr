@@ -24,6 +24,7 @@ import { canManageCompensation } from "@/types/hr-admin";
 
 import { getEditPermission, getTerminationPermission, requireHrAdmin } from "@/server/modules/hr/utils";
 import { addHours, createRandomToken, hashToken } from "@/server/utils/token";
+import { hasEmailCredentials } from "@/lib/env";
 import {
   INVITE_TOKEN_TTL_HOURS,
   buildInviteLink,
@@ -1244,21 +1245,33 @@ export const hrEmployeesService = {
       sessionUser.email ??
       null;
     let invitationSent = false;
+    let inviteEmailWarning: string | null = null;
 
     if (input.sendInvite ?? true) {
-      try {
-        invitationSent = await sendInvitationEmail({
-          to: normalizedEmail,
-          inviteLink,
-          organizationName: organization.name,
-          invitedRole: input.inviteRole,
-          recipientName: firstName,
-          expiresAt: invitation.expiresAt,
-          senderName: senderDisplayName,
-        });
-      } catch (error) {
-        console.error("Failed to send invite email:", error);
-        invitationSent = false;
+      if (!hasEmailCredentials()) {
+        inviteEmailWarning =
+          "Email credentials are not configured. Set EMAIL_USER and EMAIL_PASS to send invites.";
+      } else {
+        try {
+          invitationSent = await sendInvitationEmail({
+            to: normalizedEmail,
+            inviteLink,
+            organizationName: organization.name,
+            invitedRole: input.inviteRole,
+            recipientName: firstName,
+            expiresAt: invitation.expiresAt,
+            senderName: senderDisplayName,
+          });
+          if (!invitationSent) {
+            inviteEmailWarning =
+              "Invite email could not be sent. Please verify your SMTP configuration.";
+          }
+        } catch (error) {
+          console.error("Failed to send invite email:", error);
+          inviteEmailWarning =
+            "Invite email could not be sent. Please verify your SMTP configuration.";
+          invitationSent = false;
+        }
       }
     }
 
@@ -1268,6 +1281,7 @@ export const hrEmployeesService = {
       role: input.inviteRole,
       invitationSent,
       inviteUrl: inviteLink,
+      inviteEmailWarning,
     };
   },
 

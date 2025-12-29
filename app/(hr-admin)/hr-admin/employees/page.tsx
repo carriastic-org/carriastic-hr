@@ -155,6 +155,8 @@ export default function EmployeeManagementPage() {
   const [actionAlert, setActionAlert] = useState<{
     type: "success" | "error";
     message: string;
+    inviteUrl?: string;
+    inviteEmailWarning?: string | null;
   } | null>(null);
   const [terminatingEmployeeId, setTerminatingEmployeeId] = useState<string | null>(null);
   const [pendingTermination, setPendingTermination] = useState<EmployeeDirectoryEntry | null>(null);
@@ -282,6 +284,8 @@ export default function EmployeeManagementPage() {
         message: data.invitationSent
           ? `Invitation email sent to ${data.email}.`
           : `Invite link generated for ${data.email}.`,
+        inviteUrl: data.inviteUrl,
+        inviteEmailWarning: data.inviteEmailWarning ?? null,
       });
       resetInviteForm(defaultManualInviteValues);
       setFullNameForPlaceholder("");
@@ -474,7 +478,33 @@ export default function EmployeeManagementPage() {
               : "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-500/40 dark:bg-rose-500/10 dark:text-rose-200"
           }`}
         >
-          {actionAlert.message}
+          <div className="space-y-2">
+            <p className="font-semibold">{actionAlert.message}</p>
+            {actionAlert.inviteEmailWarning ? (
+              <p className="text-xs text-amber-700 dark:text-amber-200">
+                {actionAlert.inviteEmailWarning}
+              </p>
+            ) : null}
+            {actionAlert.inviteUrl ? (
+              <div className="flex flex-wrap items-center gap-3 text-xs">
+                <a
+                  href={actionAlert.inviteUrl}
+                  className="font-semibold text-indigo-600 hover:underline dark:text-sky-300"
+                >
+                  {actionAlert.inviteUrl}
+                </a>
+                <Button
+                  theme="white"
+                  className="px-3 py-1.5 text-xs"
+                  onClick={() => {
+                    void navigator.clipboard?.writeText(actionAlert.inviteUrl ?? "");
+                  }}
+                >
+                  Copy link
+                </Button>
+              </div>
+            ) : null}
+          </div>
         </div>
       ) : null}
 

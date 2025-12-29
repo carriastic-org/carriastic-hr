@@ -27,12 +27,36 @@ export const getAttachmentTokenSecret = (): string => {
 };
 
 export const getEmailCredentials = (): { user: string; pass: string } => {
-  const user = firstDefinedEnv(["EMAIL_USER", "SMTP_USER"]);
-  const pass = firstDefinedEnv(["EMAIL_PASS", "SMTP_PASS"]);
+  const user = firstDefinedEnv([
+    "EMAIL_USER",
+    "SMTP_USER",
+    "NEXT_PUBLIC_EMAIL_USER",
+  ]);
+  const pass = firstDefinedEnv([
+    "EMAIL_PASS",
+    "SMTP_PASS",
+    "NEXT_PUBLIC_EMAIL_PASS",
+  ]);
 
   if (!user || !pass) {
-    throw new Error("Email credentials are not configured. Set EMAIL_USER and EMAIL_PASS.");
+    throw new Error(
+      "Email credentials are not configured. Set EMAIL_USER/EMAIL_PASS (or SMTP_*/NEXT_PUBLIC_EMAIL_*).",
+    );
   }
 
   return { user, pass };
+};
+
+export const hasEmailCredentials = (): boolean => {
+  const user = firstDefinedEnv([
+    "EMAIL_USER",
+    "SMTP_USER",
+    "NEXT_PUBLIC_EMAIL_USER",
+  ]);
+  const pass = firstDefinedEnv([
+    "EMAIL_PASS",
+    "SMTP_PASS",
+    "NEXT_PUBLIC_EMAIL_PASS",
+  ]);
+  return Boolean(user && pass);
 };

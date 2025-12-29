@@ -220,6 +220,7 @@ export type HrEmployeeInviteResponse = {
   role: UserRole;
   invitationSent: boolean;
   inviteUrl: string;
+  inviteEmailWarning?: string | null;
 };
 
 export type HrEmployeeInviteInput = {
